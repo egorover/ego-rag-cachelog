@@ -12,6 +12,8 @@ from typing import List, Tuple
 import os
 from pathlib import Path
 
+from config import get_openai_client_kwargs
+
 
 class EmbeddingStore:
     """
@@ -50,8 +52,15 @@ class EmbeddingStore:
         
         # Инициализируем клиент OpenAI для создания эмбеддингов
         # API ключ берется из параметра или переменной окружения OPENAI_API_KEY
-        self.openai_client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
+        client_config = get_openai_client_kwargs(api_key=api_key)
+        self.openai_client = OpenAI(**client_config["client_kwargs"])
         self.embedding_model = embedding_model
+        self.provider = client_config["provider"]
+        self.base_url = client_config["base_url"]
+
+        print(f"Провайдер OpenAI: {self.provider}")
+        if self.base_url:
+            print(f"Base URL: {self.base_url}")
         
         print(f"Модель эмбеддингов: {embedding_model} (OpenAI API)")
         

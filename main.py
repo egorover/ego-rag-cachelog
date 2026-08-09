@@ -35,11 +35,18 @@ def initialize_system():
     
     # Проверяем наличие API ключа OpenAI
     api_key = os.getenv("OPENAI_API_KEY")
+    provider = (os.getenv("OPENAI_PROVIDER") or "openai").strip().lower()
     if not api_key:
         print("⚠️  ВНИМАНИЕ: Не найден OPENAI_API_KEY в переменных окружения!")
         print("   Создайте файл .env и добавьте туда: OPENAI_API_KEY=your_key_here")
         print("   Или установите переменную окружения в системе.")
         print()
+    else:
+        print(f"ℹ️  Провайдер OpenAI: {provider}")
+        if provider == "proxyapi":
+            print("   Используется подключение через ProxyAPI")
+        else:
+            print("   Используется обычное подключение к OpenAI")
     
     # 1. Инициализируем кеш для хранения ответов
     print("\n[1/4] Инициализация кеша...")

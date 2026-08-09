@@ -9,6 +9,8 @@ from typing import List, Tuple, Optional
 from openai import OpenAI
 import os
 
+from config import get_openai_client_kwargs
+
 
 class RAGAssistant:
     """
@@ -44,9 +46,15 @@ class RAGAssistant:
         
         # Инициализируем клиент OpenAI
         # API ключ берется из параметра или переменной окружения OPENAI_API_KEY
-        self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
+        client_config = get_openai_client_kwargs(api_key=api_key)
+        self.client = OpenAI(**client_config["client_kwargs"])
+        self.provider = client_config["provider"]
+        self.base_url = client_config["base_url"]
         
         print(f"✓ RAG-ассистент инициализирован (модель: {model})")
+        print(f"   Провайдер: {self.provider}")
+        if self.base_url:
+            print(f"   Base URL: {self.base_url}")
     
     def _format_context(self, search_results: List[Tuple[str, str, float]]) -> str:
         """
