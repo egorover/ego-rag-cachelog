@@ -11,28 +11,30 @@
 import os
 import time
 from typing import Optional
+
 from dotenv import load_dotenv
-from embeddings import EmbeddingStore, get_sample_documents
-from rag import RAGAssistant
+
 from cache import ResponseCache
 from db_logger import DatabaseLogger
+from embeddings import EmbeddingStore, get_sample_documents
+from rag import RAGAssistant
 from telegram_bot import TelegramRAGBot
 
 
 def initialize_system():
     """
     Инициализирует все компоненты RAG-системы.
-    
+
     Returns:
         Кортеж (embedding_store, rag_assistant, cache, logger)
     """
     print("=" * 70)
     print("🚀 ИНИЦИАЛИЗАЦИЯ RAG-АССИСТЕНТА")
     print("=" * 70)
-    
+
     # Загружаем переменные окружения из .env файла
     load_dotenv()
-    
+
     # Проверяем наличие API ключа OpenAI
     api_key = os.getenv("OPENAI_API_KEY")
     provider = (os.getenv("OPENAI_PROVIDER") or "openai").strip().lower()
@@ -47,20 +49,20 @@ def initialize_system():
             print("   Используется подключение через ProxyAPI")
         else:
             print("   Используется обычное подключение к OpenAI")
-    
+
     # 1. Инициализируем кеш для хранения ответов
     print("\n[1/4] Инициализация кеша...")
     cache = ResponseCache(cache_file="cache.json")
-    
+
     # 2. Инициализируем векторное хранилище ChromaDB
     print("\n[2/4] Инициализация векторного хранилища...")
     embedding_store = EmbeddingStore(
         collection_name="rag_documents",
         persist_directory="./chroma_db",
         embedding_model="text-embedding-3-small",  # Модель OpenAI для эмбеддингов
-        api_key=api_key
+        api_key=api_key,
     )
-    
+
     # Проверяем, нужно ли добавить примеры документов
     if embedding_store.collection.count() == 0:
         print("\n📝 База данных пуста. Добавляем примеры документов...")
@@ -68,46 +70,44 @@ def initialize_system():
         embedding_store.add_documents(sample_docs)
     else:
         print(f"✓ В базе уже есть {embedding_store.collection.count()} документов")
-    
+
     # 3. Инициализируем RAG-ассистента
     print("\n[3/4] Инициализация RAG-ассистента...")
     rag_assistant = RAGAssistant(
-        embedding_store=embedding_store,
-        model="gpt-3.5-turbo",
-        temperature=0.7
+        embedding_store=embedding_store, model="gpt-3.5-turbo", temperature=0.7
     )
-    
+
     # 4. Инициализируем логгер базы данных
     print("\n[4/4] Инициализация логгера базы данных...")
     logger = DatabaseLogger(db_path="logs.db")
     print("✓ Логгер инициализирован")
-    
+
     print("\n" + "=" * 70)
     print("✅ СИСТЕМА ГОТОВА К РАБОТЕ")
     print("=" * 70)
-    
+
     return embedding_store, rag_assistant, cache, logger
 
 
 def answer_question(
-    query: str, 
-    rag_assistant: RAGAssistant, 
+    query: str,
+    rag_assistant: RAGAssistant,
     cache: ResponseCache,
     logger: DatabaseLogger,
     source: str = "console",
-    user_id: Optional[str] = None,
-    username: Optional[str] = None
+    user_id: str | None = None,
+    username: str | None = None,
 ) -> str:
     """
     Отвечает на вопрос пользователя с использованием кеша и RAG.
-    
+
     Логика работы:
     1. Проверяем кеш - если ответ есть, возвращаем его
     2. Если ответа нет, выполняем RAG (поиск + генерация)
     3. Сохраняем новый ответ в кеш
     4. Логируем взаимодействие в базу данных
     5. Возвращаем ответ
-    
+
     Args:
         query: Вопрос пользователя
         rag_assistant: Экземпляр RAG-ассистента
@@ -116,21 +116,21 @@ def answer_question(
         source: Источник запроса (console, telegram и т.д.)
         user_id: ID пользователя (для Telegram)
         username: Имя пользователя
-        
+
     Returns:
         Ответ на вопрос
     """
     print("\n" + "=" * 70)
     print(f"❓ ВОПРОС: {query}")
     print("=" * 70)
-    
+
     start_time = time.time()
-    
+
     # Шаг 1: Проверяем кеш
     print("\n[Шаг 1] Проверка кеша...")
     cached_answer = cache.get(query)
     from_cache = cached_answer is not None
-    
+
     if cached_answer:
         # Ответ найден в кеше - возвращаем его
         print("\n💾 Ответ из кеша:")
@@ -141,29 +141,27 @@ def answer_question(
     else:
         # Шаг 2: Ответа нет в кеше - выполняем RAG
         print("\n[Шаг 2] Выполнение RAG (поиск + генерация)...")
-        
+
         try:
             answer, search_results = rag_assistant.generate_response(
-                query=query,
-                top_k=3,
-                verbose=True
+                query=query, top_k=3, verbose=True
             )
-            
+
             # Шаг 3: Сохраняем ответ в кеш
             print("\n[Шаг 3] Сохранение ответа в кеш...")
             cache.set(query, answer)
-            
+
             # Выводим финальный ответ
             print("\n💡 ОТВЕТ:")
             print("-" * 70)
             print(answer)
             print("-" * 70)
-            
+
         except Exception as e:
             error_msg = f"Ошибка при обработке запроса: {str(e)}"
             print(f"\n❌ {error_msg}")
             answer = error_msg
-    
+
     # Шаг 4: Логируем взаимодействие
     response_time_ms = int((time.time() - start_time) * 1000)
     logger.log_interaction(
@@ -173,16 +171,18 @@ def answer_question(
         user_id=user_id,
         username=username,
         from_cache=from_cache,
-        response_time_ms=response_time_ms
+        response_time_ms=response_time_ms,
     )
-    
+
     return answer
 
 
-def interactive_mode(rag_assistant: RAGAssistant, cache: ResponseCache, logger: DatabaseLogger):
+def interactive_mode(
+    rag_assistant: RAGAssistant, cache: ResponseCache, logger: DatabaseLogger
+):
     """
     Интерактивный режим общения с ассистентом.
-    
+
     Пользователь может задавать вопросы в цикле до тех пор,
     пока не введет команду выхода.
     """
@@ -197,50 +197,54 @@ def interactive_mode(rag_assistant: RAGAssistant, cache: ResponseCache, logger: 
     print("  • stats - показать статистику системы")
     print("  • logs - экспортировать логи в CSV")
     print()
-    
+
     while True:
         try:
             # Получаем ввод от пользователя
             user_input = input("\n👤 Вы: ").strip()
-            
+
             # Проверяем команды выхода
-            if user_input.lower() in ['exit', 'quit', 'выход', 'q', '']:
+            if user_input.lower() in ["exit", "quit", "выход", "q", ""]:
                 print("\n👋 До свидания!")
                 break
-            
+
             # Обрабатываем специальные команды
-            if user_input.lower() == 'cache':
+            if user_input.lower() == "cache":
                 print(f"\n📊 Кеш содержит {cache.size()} записей")
                 continue
-            
-            if user_input.lower() == 'clear_cache':
+
+            if user_input.lower() == "clear_cache":
                 cache.clear()
                 print("\n✓ Кеш очищен")
                 continue
-            
-            if user_input.lower() == 'stats':
+
+            if user_input.lower() == "stats":
                 print(f"\n📊 СТАТИСТИКА СИСТЕМЫ:")
-                print(f"  • Документов в ChromaDB: {rag_assistant.embedding_store.collection.count()}")
+                print(
+                    f"  • Документов в ChromaDB: {rag_assistant.embedding_store.collection.count()}"
+                )
                 print(f"  • Записей в кеше: {cache.size()}")
                 print(f"  • Модель LLM: {rag_assistant.model}")
-                
+
                 # Показываем статистику из логов
                 log_stats = logger.get_stats()
                 print(f"\n📝 ЛОГИ:")
                 print(f"  • Всего запросов: {log_stats['total_requests']}")
                 print(f"  • Из кеша: {log_stats['cached_requests']}")
-                print(f"  • Среднее время ответа: {log_stats['avg_response_time_ms']:.0f} мс")
+                print(
+                    f"  • Среднее время ответа: {log_stats['avg_response_time_ms']:.0f} мс"
+                )
                 continue
-            
-            if user_input.lower() == 'logs':
+
+            if user_input.lower() == "logs":
                 filename = f"logs_console_{int(time.time())}.csv"
                 logger.export_to_csv(output_path=filename, source="console")
                 print(f"\n✓ Логи экспортированы в файл: {filename}")
                 continue
-            
+
             # Обрабатываем вопрос пользователя
             answer_question(user_input, rag_assistant, cache, logger, source="console")
-            
+
         except KeyboardInterrupt:
             print("\n\n👋 Прервано пользователем. До свидания!")
             break
@@ -248,10 +252,12 @@ def interactive_mode(rag_assistant: RAGAssistant, cache: ResponseCache, logger: 
             print(f"\n❌ Ошибка: {str(e)}")
 
 
-def demo_mode(rag_assistant: RAGAssistant, cache: ResponseCache, logger: DatabaseLogger):
+def demo_mode(
+    rag_assistant: RAGAssistant, cache: ResponseCache, logger: DatabaseLogger
+):
     """
     Демонстрационный режим с заранее заготовленными вопросами.
-    
+
     Показывает работу системы на примерах, включая использование кеша.
     """
     print("\n" + "=" * 70)
@@ -259,26 +265,26 @@ def demo_mode(rag_assistant: RAGAssistant, cache: ResponseCache, logger: Databas
     print("=" * 70)
     print("\nСейчас будет продемонстрирована работа RAG-ассистента")
     print("на нескольких примерах вопросов.\n")
-    
+
     # Список демо-вопросов
     demo_questions = [
         "Что такое Python и для чего он используется?",
         "Расскажи про RAG и как он работает",
         "Что такое векторные базы данных?",
-        "Что такое Python и для чего он используется?"  # Повторный вопрос для демонстрации кеша
+        "Что такое Python и для чего он используется?",  # Повторный вопрос для демонстрации кеша
     ]
-    
+
     for i, question in enumerate(demo_questions, 1):
         print(f"\n\n{'#' * 70}")
         print(f"ВОПРОС {i} из {len(demo_questions)}")
         print(f"{'#' * 70}")
-        
+
         answer_question(question, rag_assistant, cache, logger, source="console")
-        
+
         # Пауза между вопросами (кроме последнего)
         if i < len(demo_questions):
             input("\n[Нажмите Enter для следующего вопроса...]")
-    
+
     print("\n\n" + "=" * 70)
     print("✅ ДЕМОНСТРАЦИЯ ЗАВЕРШЕНА")
     print("=" * 70)
@@ -291,11 +297,11 @@ def main():
     try:
         # Инициализируем систему
         embedding_store, rag_assistant, cache, logger = initialize_system()
-        
+
         # Загружаем переменные окружения
         load_dotenv()
         telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
-        
+
         # Выбор режима работы
         print("\n" + "=" * 70)
         print("ВЫБОР РЕЖИМА РАБОТЫ")
@@ -305,18 +311,24 @@ def main():
         if telegram_token:
             print("3. Telegram бот - запуск бота для Telegram")
         print()
-        
-        mode = input("Выберите режим (1, 2" + (", 3" if telegram_token else "") + ", по умолчанию 1): ").strip()
-        
-        if mode == '2':
+
+        mode = input(
+            "Выберите режим (1, 2"
+            + (", 3" if telegram_token else "")
+            + ", по умолчанию 1): "
+        ).strip()
+
+        if mode == "2":
             demo_mode(rag_assistant, cache, logger)
-            
+
             # Предложить перейти в интерактивный режим
             print("\n" + "=" * 70)
-            continue_interactive = input("\nПерейти в интерактивный режим? (y/n): ").strip().lower()
-            if continue_interactive in ['y', 'yes', 'д', 'да', '']:
+            continue_interactive = (
+                input("\nПерейти в интерактивный режим? (y/n): ").strip().lower()
+            )
+            if continue_interactive in ["y", "yes", "д", "да", ""]:
                 interactive_mode(rag_assistant, cache, logger)
-        elif mode == '3' and telegram_token:
+        elif mode == "3" and telegram_token:
             # Запускаем Telegram бота
             print("\n" + "=" * 70)
             print("🤖 ЗАПУСК TELEGRAM БОТА")
@@ -325,18 +337,18 @@ def main():
                 token=telegram_token,
                 rag_assistant=rag_assistant,
                 cache=cache,
-                logger=logger
+                logger=logger,
             )
             bot.run()
         else:
             interactive_mode(rag_assistant, cache, logger)
-        
+
     except Exception as e:
         print(f"\n❌ Критическая ошибка: {str(e)}")
         import traceback
+
         traceback.print_exc()
 
 
 if __name__ == "__main__":
     main()
-
