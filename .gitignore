@@ -1,40 +1,59 @@
-# Python
+# === Специфичные файлы проекта ===
+.env
+cache.json
+chroma_db/
+
+# === Логирование и базы данных ===
+*.db
+logs.db
+logs_*.csv
+*.log
+
+# === Окружение и зависимости Python ===
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-venv/
 env/
+venv/
+.env/
+.venv/
 ENV/
-*.egg-info/
-dist/
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# Файлы конфигурации с секретами
-.env
-
-# Данные ChromaDB
-chroma_db/
-
-# Кеш
-cache.json
-
-# База данных логов
-logs.db
-*.db
-
-# Временные CSV файлы логов
-logs_*.csv
-
-# IDE
+# === Настройки IDE и редакторов ===
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.project
+.pydevproject
+.settings/
 
-# OS
+# === Системные файлы ===
 .DS_Store
+.DS_Store?
+._*
 Thumbs.db
+ehthumbs.db
+Desktop.ini
+
 
